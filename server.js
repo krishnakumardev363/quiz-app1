@@ -4,6 +4,11 @@ import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import authRoutes from "./routes/authRoutes.js";
+import adminCourseRoutes from "./routes/adminCourseRoutes.js";
+import adminSubjectRoutes from "./routes/adminSubjectRoutes.js";
+import adminQuizRoutes from "./routes/adminQuizRoutes.js";
+import adminQuestionRoutes from "./routes/adminQuestionRoutes.js";
+
 
 dotenv.config();
 
@@ -21,6 +26,10 @@ app.use(
 
 // Routes
 app.use("/api/auth", authRoutes);
+app.use("/api/admin/courses", adminCourseRoutes);
+app.use("/api/admin/subjects", adminSubjectRoutes);
+app.use("/api/admin/quizzes", adminQuizRoutes);
+app.use("/api/admin/questions", adminQuestionRoutes);
 
 // Health check
 app.get("/", (req, res) => {
