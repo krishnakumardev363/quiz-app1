@@ -138,6 +138,36 @@ router.get("/pending/:quizId", async (req, res) => {
 });
 
 // ---------------------------------------------
+// PUT /api/admin/ai-questions/bulk-publish - publish all pending AI questions for a quiz
+// Body: { quizId }
+// Use this AFTER reviewing the pending list via GET /pending/:quizId
+// ---------------------------------------------
+router.put("/bulk-publish", async (req, res) => {
+  try {
+    const { quizId } = req.body;
+
+    if (!quizId) {
+      return res.status(400).json({ message: "quizId is required" });
+    }
+
+    const result = await Question.updateMany(
+      { quizId, source: "ai", isPublished: false },
+      { isPublished: true }
+    );
+
+    const count = await Question.countDocuments({ quizId, isPublished: true });
+    await Quiz.findByIdAndUpdate(quizId, { totalQuestions: count });
+
+    res.status(200).json({
+      message: `${result.modifiedCount} AI questions published successfully`,
+      modifiedCount: result.modifiedCount,
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Error bulk publishing questions", error: error.message });
+  }
+});
+
+// ---------------------------------------------
 // PUT /api/admin/ai-questions/:id/publish - approve and publish a reviewed AI question
 // Admin can edit fields in the same request before publishing.
 // ---------------------------------------------
