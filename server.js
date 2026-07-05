@@ -10,6 +10,7 @@ import adminQuizRoutes from "./routes/adminQuizRoutes.js";
 import adminQuestionRoutes from "./routes/adminQuestionRoutes.js";
 import quizAttemptRoutes from "./routes/quizAttemptRoutes.js";
 import aiQuestionRoutes from "./routes/aiQuestionRoutes.js";
+import courseRoutes from "./routes/courseRoutes.js";
 
 dotenv.config();
 
@@ -33,6 +34,7 @@ app.use("/api/admin/quizzes", adminQuizRoutes);
 app.use("/api/admin/questions", adminQuestionRoutes);
 app.use("/api/quiz", quizAttemptRoutes);
 app.use("/api/admin/ai-questions", aiQuestionRoutes);
+app.use("/api/courses", courseRoutes);
 
 // Health check
 app.get("/", (req, res) => {
