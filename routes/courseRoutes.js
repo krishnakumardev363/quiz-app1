@@ -143,4 +143,50 @@ router.get("/dashboard/stats", async (req, res) => {
   }
 });
 
+// ---------------------------------------------
+// GET /api/courses/profile/stats - detailed profile data: XP, badges, score trend, weak topics
+// ---------------------------------------------
+router.get("/profile/stats", async (req, res) => {
+  try {
+    const results = await Result.find({ userId: req.user._id })
+      .populate("quizId", "title difficulty subjectId")
+      .sort({ completedAt: 1 });
+
+    // Score trend over time (for a line chart)
+    const scoreTrend = results.map((r) => ({
+      date: r.completedAt.toISOString().split("T")[0],
+      scorePercent: Math.round((r.correctCount / r.totalQuestions) * 100),
+    }));
+
+    // Accuracy by quiz title (proxy for "subject" since we don't have subject name here directly)
+    const accuracyMap = {};
+    results.forEach((r) => {
+      const title = r.quizId?.title || "Unknown";
+      if (!accuracyMap[title]) {
+        accuracyMap[title] = { correct: 0, total: 0 };
+      }
+      accuracyMap[title].correct += r.correctCount;
+      accuracyMap[title].total += r.totalQuestions;
+    });
+
+    const accuracyByTopic = Object.entries(accuracyMap).map(([title, data]) => ({
+      topic: title,
+      accuracy: Math.round((data.correct / data.total) * 100),
+    }));
+
+    const weakTopics = accuracyByTopic.filter((t) => t.accuracy < 60).map((t) => t.topic);
+
+    res.status(200).json({
+      xp: req.user.xp,
+      streak: req.user.streak,
+      badges: req.user.badges,
+      scoreTrend,
+      accuracyByTopic,
+      weakTopics,
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching profile stats", error: error.message });
+  }
+});
+
 export default router;
