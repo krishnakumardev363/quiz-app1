@@ -2,10 +2,14 @@ import express from "express";
 import Quiz from "../models/Quiz.js";
 import Question from "../models/Question.js";
 import Result from "../models/Result.js";
+import Subject from "../models/Subject.js";
+import Enrollment from "../models/Enrollment.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { shuffleArray, getNextDifficulty, pickQuestionByDifficulty } from "../utils/adaptiveDifficulty.js";
 
 const router = express.Router();
+
+const PASS_THRESHOLD = 0.75; // 75% correct required to count as "completed/passed"
 
 // All routes require a logged-in user (student or admin)
 router.use(protect);
@@ -82,7 +86,7 @@ router.get("/:quizId/start", async (req, res) => {
 router.post("/:quizId/submit", async (req, res) => {
   try {
     const { quizId } = req.params;
-    const { answers, mode, courseId } = req.body;
+    const { answers, mode } = req.body;
 
     if (!Array.isArray(answers)) {
       return res.status(400).json({ message: "Answers array is required" });
@@ -93,15 +97,17 @@ router.post("/:quizId/submit", async (req, res) => {
       return res.status(404).json({ message: "Quiz not found" });
     }
 
-    // Fetch ALL published questions for this quiz - this is the source of truth
-    // for totalQuestions, not just the ones the client happened to submit.
+    // Derive the course this quiz belongs to server-side (never trust client for this)
+    const subject = await Subject.findById(quiz.subjectId);
+    const courseId = subject ? subject.courseId : null;
+
+    // Fetch ALL published questions for this quiz - source of truth for totalQuestions
     const allQuizQuestions = await Question.find({ quizId, isPublished: true });
 
     if (allQuizQuestions.length === 0) {
       return res.status(400).json({ message: "This quiz has no published questions" });
     }
 
-    // Map submitted answers by questionId for quick lookup
     const submittedMap = {};
     answers.forEach((a) => {
       submittedMap[a.questionId] = a.selectedAnswer || null;
@@ -111,7 +117,6 @@ router.post("/:quizId/submit", async (req, res) => {
     let wrongCount = 0;
     let skippedCount = 0;
 
-    // Loop over EVERY question in the quiz, not just submitted ones
     const gradedAnswers = allQuizQuestions.map((question) => {
       const qId = question._id.toString();
       const selected = qId in submittedMap ? submittedMap[qId] : null;
@@ -132,37 +137,86 @@ router.post("/:quizId/submit", async (req, res) => {
       };
     });
 
-    // Scoring: +1 per correct. If negative marking enabled, -0.25 per wrong (never below 0)
     let score = correctCount;
     if (quiz.negativeMarking) {
       score = correctCount - wrongCount * 0.25;
       score = Math.max(score, 0);
     }
 
+    const scorePercent = correctCount / allQuizQuestions.length;
+    const passed = scorePercent >= PASS_THRESHOLD;
+
+    // Check if this is the user's FIRST completed attempt at this quiz.
+    // Only the first attempt earns XP - retakes are for practice, not farming.
+    const previousAttempts = await Result.countDocuments({
+      userId: req.user._id,
+      quizId,
+      status: "completed",
+    });
+    const isFirstAttempt = previousAttempts === 0;
+
     const result = await Result.create({
       userId: req.user._id,
       quizId,
-      courseId: courseId || null,
+      courseId,
       score,
       totalQuestions: allQuizQuestions.length,
       correctCount,
       wrongCount,
       skippedCount,
+      passed,
       mode: mode === "practice" ? "practice" : "exam",
       answers: gradedAnswers,
       status: "completed",
       completedAt: new Date(),
     });
 
-    // Award XP: +10 per correct answer (simple gamification hook)
-    const xpEarned = correctCount * 10;
-    req.user.xp += xpEarned;
-    await req.user.save();
+    // XP: only awarded on first attempt AND only if passed (>=75%). Prevents farming
+    // by retaking, and prevents earning XP for a failing attempt.
+    const xpEarned = isFirstAttempt && passed ? correctCount * 10 : 0;
+    if (xpEarned > 0) {
+      req.user.xp += xpEarned;
+      await req.user.save();
+    }
+
+    // Update course progress: % of quizzes in the course the user has PASSED (>=75%) at least once
+    if (courseId) {
+      const subjectsInCourse = await Subject.find({ courseId });
+      const subjectIds = subjectsInCourse.map((s) => s._id);
+      const quizzesInCourse = await Quiz.find({ subjectId: { $in: subjectIds } });
+      const totalQuizzesInCourse = quizzesInCourse.length;
+
+      if (totalQuizzesInCourse > 0) {
+        const passedQuizIds = await Result.distinct("quizId", {
+          userId: req.user._id,
+          courseId,
+          status: "completed",
+          passed: true,
+        });
+
+        const progressPercent = Math.min(
+          Math.round((passedQuizIds.length / totalQuizzesInCourse) * 100),
+          100
+        );
+
+        await Enrollment.findOneAndUpdate(
+          { userId: req.user._id, courseId },
+          { progressPercent },
+          { new: true }
+        );
+      }
+    }
 
     res.status(201).json({
-      message: "Quiz submitted successfully",
+      message: !passed
+        ? `You scored ${Math.round(scorePercent * 100)}%. You need at least 75% to mark this quiz as completed. Try again!`
+        : isFirstAttempt
+        ? "Quiz completed successfully"
+        : "Retake submitted. No additional XP awarded for retakes.",
       result,
       xpEarned,
+      isFirstAttempt,
+      passed,
     });
   } catch (error) {
     res.status(500).json({ message: "Error submitting quiz", error: error.message });

@@ -75,10 +75,30 @@ router.get("/:id", async (req, res) => {
 
     const subjects = await Subject.find({ courseId: course._id }).sort({ order: 1 });
 
+    // Get logged-in user's best score % for every quiz, so the frontend can mark
+    // quizzes as "completed" (passed >=75%) or show best score for retakes.
+    const userResults = await Result.find({ userId: req.user._id, courseId: course._id });
+    const bestScoreByQuiz = {};
+    userResults.forEach((r) => {
+      const percent = Math.round((r.correctCount / r.totalQuestions) * 100);
+      const qId = r.quizId.toString();
+      if (!bestScoreByQuiz[qId] || percent > bestScoreByQuiz[qId]) {
+        bestScoreByQuiz[qId] = percent;
+      }
+    });
+
     const subjectsWithQuizzes = await Promise.all(
       subjects.map(async (subject) => {
         const quizzes = await Quiz.find({ subjectId: subject._id }).sort({ order: 1 });
-        return { ...subject.toObject(), quizzes };
+        const quizzesWithStatus = quizzes.map((q) => {
+          const bestScore = bestScoreByQuiz[q._id.toString()] ?? null;
+          return {
+            ...q.toObject(),
+            bestScore,
+            isCompleted: bestScore !== null && bestScore >= 75,
+          };
+        });
+        return { ...subject.toObject(), quizzes: quizzesWithStatus };
       })
     );
 
@@ -95,11 +115,17 @@ router.get("/dashboard/stats", async (req, res) => {
   try {
     const results = await Result.find({ userId: req.user._id });
 
-    const totalCompleted = results.length;
+    // Count UNIQUE quizzes PASSED (>=75%), not total attempts - retakes and
+    // failing attempts shouldn't inflate this number.
+    const passedQuizIds = new Set(
+      results.filter((r) => r.passed).map((r) => r.quizId.toString())
+    );
+    const totalCompleted = passedQuizIds.size;
+
     const avgScore =
-      totalCompleted > 0
+      results.length > 0
         ? results.reduce((sum, r) => sum + (r.correctCount / r.totalQuestions) * 100, 0) /
-          totalCompleted
+          results.length
         : 0;
 
     const enrollments = await Enrollment.find({ userId: req.user._id }).populate("courseId");

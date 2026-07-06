@@ -60,6 +60,11 @@ const resultSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    passed: {
+      // true only if correctCount/totalQuestions >= 75%
+      type: Boolean,
+      default: false,
+    },
     mode: {
       type: String,
       enum: ["practice", "exam"],
