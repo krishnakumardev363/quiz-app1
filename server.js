@@ -12,6 +12,7 @@ import quizAttemptRoutes from "./routes/quizAttemptRoutes.js";
 import aiQuestionRoutes from "./routes/aiQuestionRoutes.js";
 import courseRoutes from "./routes/courseRoutes.js";
 import leaderboardRoutes from "./routes/leaderboardRoutes.js";
+import certificateRoutes from "./routes/certificateRoutes.js";
 
 dotenv.config();
 
@@ -37,6 +38,7 @@ app.use("/api/quiz", quizAttemptRoutes);
 app.use("/api/admin/ai-questions", aiQuestionRoutes);
 app.use("/api/courses", courseRoutes);
 app.use("/api/leaderboard", leaderboardRoutes);
+app.use("/api/certificate", certificateRoutes);
 
 // Health check
 app.get("/", (req, res) => {

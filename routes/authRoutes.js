@@ -257,10 +257,66 @@ router.post("/logout", (req, res) => {
 });
 
 // ---------------------------------------------
+// PUT /api/auth/update-profile - update logged-in user's name
+// ---------------------------------------------
+router.put("/update-profile", protect, async (req, res) => {
+  try {
+    const { name } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ message: "Name is required" });
+    }
+
+    req.user.name = name.trim();
+    await req.user.save();
+
+    res.status(200).json({
+      _id: req.user._id,
+      name: req.user.name,
+      email: req.user.email,
+      role: req.user.role,
+      xp: req.user.xp,
+      streak: req.user.streak,
+      badges: req.user.badges,
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Error updating profile", error: error.message });
+  }
+});
+
+// ---------------------------------------------
 // GET /api/auth/me - get current logged-in user
 // ---------------------------------------------
 router.get("/me", protect, async (req, res) => {
   res.status(200).json(req.user);
+});
+
+// ---------------------------------------------
+// PUT /api/auth/update-profile - update logged-in user's name
+// ---------------------------------------------
+router.put("/update-profile", protect, async (req, res) => {
+  try {
+    const { name } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ message: "Name cannot be empty" });
+    }
+
+    req.user.name = name.trim();
+    await req.user.save();
+
+    res.status(200).json({
+      _id: req.user._id,
+      name: req.user.name,
+      email: req.user.email,
+      role: req.user.role,
+      xp: req.user.xp,
+      streak: req.user.streak,
+      badges: req.user.badges,
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Error updating profile", error: error.message });
+  }
 });
 
 export default router;
