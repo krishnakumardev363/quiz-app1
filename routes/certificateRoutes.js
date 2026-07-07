@@ -32,6 +32,14 @@ router.get("/:courseId", async (req, res) => {
       return res.status(404).json({ message: "Course not found" });
     }
 
+    if (course.certificateXpRequired > 0 && req.user.xp < course.certificateXpRequired) {
+      return res.status(402).json({
+        message: `This certificate requires ${course.certificateXpRequired} XP. You currently have ${req.user.xp} XP. Earn more by completing quizzes or buy XP from the XP Store.`,
+        xpRequired: course.certificateXpRequired,
+        currentXp: req.user.xp,
+      });
+    }
+
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",

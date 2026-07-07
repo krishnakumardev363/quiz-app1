@@ -15,6 +15,8 @@ import aiQuestionRoutes from "./routes/aiQuestionRoutes.js";
 import courseRoutes from "./routes/courseRoutes.js";
 import leaderboardRoutes from "./routes/leaderboardRoutes.js";
 import certificateRoutes from "./routes/certificateRoutes.js";
+import adminLessonRoutes from "./routes/adminLessonRoutes.js";
+import xpStoreRoutes from "./routes/xpStoreRoutes.js";
 import registerSocketHandlers from "./socketHandlers.js";
 
 dotenv.config();
@@ -42,6 +44,8 @@ app.use("/api/admin/ai-questions", aiQuestionRoutes);
 app.use("/api/courses", courseRoutes);
 app.use("/api/leaderboard", leaderboardRoutes);
 app.use("/api/certificate", certificateRoutes);
+app.use("/api/admin/lessons", adminLessonRoutes);
+app.use("/api/xp-store", xpStoreRoutes);
 
 // Health check
 app.get("/", (req, res) => {

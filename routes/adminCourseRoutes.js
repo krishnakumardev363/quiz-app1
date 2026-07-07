@@ -10,7 +10,7 @@ router.use(protect, authorizeRoles("admin"));
 // POST /api/admin/courses - create course
 router.post("/", async (req, res) => {
   try {
-    const { title, description, thumbnail, category } = req.body;
+    const { title, description, thumbnail, category, certificateXpRequired } = req.body;
 
     if (!title) {
       return res.status(400).json({ message: "Title is required" });
@@ -22,6 +22,7 @@ router.post("/", async (req, res) => {
       thumbnail,
       category,
       instructorId: req.user._id,
+      certificateXpRequired: Number(certificateXpRequired) || 0,
     });
 
     res.status(201).json(course);

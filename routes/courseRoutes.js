@@ -3,7 +3,7 @@ import Course from "../models/Course.js";
 import Enrollment from "../models/Enrollment.js";
 import Subject from "../models/Subject.js";
 import Quiz from "../models/Quiz.js";
-// import Result from "../models/Result.js";
+import Lesson from "../models/Lesson.js";
 import Result from "../models/Result.js";
 import { protect } from "../middleware/authMiddleware.js";
 
@@ -90,6 +90,7 @@ router.get("/:id", async (req, res) => {
 
     const subjectsWithQuizzes = await Promise.all(
       subjects.map(async (subject) => {
+        const lessons = await Lesson.find({ subjectId: subject._id }).sort({ order: 1 });
         const quizzes = await Quiz.find({ subjectId: subject._id }).sort({ order: 1 });
         const quizzesWithStatus = quizzes.map((q) => {
           const bestScore = bestScoreByQuiz[q._id.toString()] ?? null;
@@ -99,7 +100,7 @@ router.get("/:id", async (req, res) => {
             isCompleted: bestScore !== null && bestScore >= 75,
           };
         });
-        return { ...subject.toObject(), quizzes: quizzesWithStatus };
+        return { ...subject.toObject(), lessons, quizzes: quizzesWithStatus };
       })
     );
 
@@ -187,6 +188,21 @@ router.get("/profile/stats", async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ message: "Error fetching profile stats", error: error.message });
+  }
+});
+
+// ---------------------------------------------
+// GET /api/courses/lessons/:lessonId - fetch a single lesson's content (any logged-in user)
+// ---------------------------------------------
+router.get("/lessons/:lessonId", async (req, res) => {
+  try {
+    const lesson = await Lesson.findById(req.params.lessonId);
+    if (!lesson) {
+      return res.status(404).json({ message: "Lesson not found" });
+    }
+    res.status(200).json(lesson);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching lesson", error: error.message });
   }
 });
 

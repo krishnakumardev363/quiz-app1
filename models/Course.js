@@ -28,6 +28,11 @@ const courseSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    certificateXpRequired: {
+      // 0 means no XP requirement - anyone who completes the course can download
+      type: Number,
+      default: 0,
+    },
   },
   { timestamps: true }
 );
