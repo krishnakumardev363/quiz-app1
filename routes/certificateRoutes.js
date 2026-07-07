@@ -82,7 +82,7 @@ router.get("/:courseId", async (req, res) => {
       .fontSize(20)
       .fillColor("#0066FF")
       .font("Helvetica-Bold")
-      .text("QUIZERA", 0, 58, { align: "center", characterSpacing: 3 });
+      .text("DeagleTech", 0, 58, { align: "center", characterSpacing: 3 });
 
     doc
       .fontSize(9)
@@ -168,7 +168,7 @@ router.get("/:courseId", async (req, res) => {
       .fontSize(11)
       .fillColor("#111111")
       .font("Helvetica-Bold")
-      .text("Quizera Team", sigX - 70, sigY + 6, { width: 140, align: "center" });
+      .text("DeagleTech Team", sigX - 70, sigY + 6, { width: 140, align: "center" });
     doc
       .fontSize(8)
       .fillColor("#9CA3AF")
