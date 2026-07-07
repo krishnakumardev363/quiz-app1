@@ -3,6 +3,8 @@ import mongoose from "mongoose";
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 import cors from "cors";
+import { createServer } from "http";
+import { Server } from "socket.io";
 import authRoutes from "./routes/authRoutes.js";
 import adminCourseRoutes from "./routes/adminCourseRoutes.js";
 import adminSubjectRoutes from "./routes/adminSubjectRoutes.js";
@@ -13,6 +15,7 @@ import aiQuestionRoutes from "./routes/aiQuestionRoutes.js";
 import courseRoutes from "./routes/courseRoutes.js";
 import leaderboardRoutes from "./routes/leaderboardRoutes.js";
 import certificateRoutes from "./routes/certificateRoutes.js";
+import registerSocketHandlers from "./socketHandlers.js";
 
 dotenv.config();
 
@@ -48,11 +51,20 @@ app.get("/", (req, res) => {
 // Connect to MongoDB and start server
 const PORT = process.env.PORT || 5000;
 
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    credentials: true,
+  },
+});
+registerSocketHandlers(io);
+
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => {
     console.log("MongoDB connected successfully");
-    app.listen(PORT, () => {
+    httpServer.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });
   })

@@ -1,6 +1,7 @@
 import express from "express";
 import Question from "../models/Question.js";
 import Quiz from "../models/Quiz.js";
+import Result from "../models/Result.js";
 import { protect, authorizeRoles } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -82,6 +83,38 @@ router.delete("/:id", async (req, res) => {
     res.status(200).json({ message: "Question deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: "Error deleting question", error: error.message });
+  }
+});
+
+// ---------------------------------------------
+// GET /api/admin/questions/results/all - admin view of ALL quiz results, most recent first
+// ---------------------------------------------
+router.get("/results/all", async (req, res) => {
+  try {
+    const results = await Result.find()
+      .populate("userId", "name email")
+      .populate("quizId", "title")
+      .sort({ completedAt: -1 })
+      .limit(200);
+
+    res.status(200).json(results);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching results history", error: error.message });
+  }
+});
+
+// ---------------------------------------------
+// DELETE /api/admin/questions/results/:id - delete a specific result entry
+// ---------------------------------------------
+router.delete("/results/:id", async (req, res) => {
+  try {
+    const result = await Result.findByIdAndDelete(req.params.id);
+    if (!result) {
+      return res.status(404).json({ message: "Result not found" });
+    }
+    res.status(200).json({ message: "Result deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Error deleting result", error: error.message });
   }
 });
 

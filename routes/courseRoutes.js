@@ -3,6 +3,7 @@ import Course from "../models/Course.js";
 import Enrollment from "../models/Enrollment.js";
 import Subject from "../models/Subject.js";
 import Quiz from "../models/Quiz.js";
+// import Result from "../models/Result.js";
 import Result from "../models/Result.js";
 import { protect } from "../middleware/authMiddleware.js";
 

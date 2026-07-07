@@ -67,8 +67,16 @@ const resultSchema = new mongoose.Schema(
     },
     mode: {
       type: String,
-      enum: ["practice", "exam"],
+      enum: ["practice", "exam", "multiplayer"],
       default: "exam",
+    },
+    rank: {
+      type: Number,
+      default: null,
+    },
+    totalPlayers: {
+      type: Number,
+      default: null,
     },
     answers: {
       type: [answerSchema],
