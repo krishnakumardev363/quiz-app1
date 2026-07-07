@@ -28,7 +28,7 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "https://quizdtech.netlify.app/login",
+    origin: process.env.CLIENT_URL || "https://quizdtech.netlify.app/",
     credentials: true,
   })
 );
