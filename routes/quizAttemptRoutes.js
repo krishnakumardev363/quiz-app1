@@ -3,6 +3,8 @@ import Quiz from "../models/Quiz.js";
 import Question from "../models/Question.js";
 import Result from "../models/Result.js";
 import Subject from "../models/Subject.js";
+import Lesson from "../models/Lesson.js";
+import LessonProgress from "../models/LessonProgress.js";
 import Enrollment from "../models/Enrollment.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { shuffleArray, getNextDifficulty, pickQuestionByDifficulty } from "../utils/adaptiveDifficulty.js";
@@ -27,6 +29,24 @@ router.get("/:quizId/start", async (req, res) => {
     const quiz = await Quiz.findById(quizId);
     if (!quiz) {
       return res.status(404).json({ message: "Quiz not found" });
+    }
+
+    // Gate: student must have read every lesson in this quiz's subject first
+    const lessonsInSubject = await Lesson.find({ subjectId: quiz.subjectId });
+    if (lessonsInSubject.length > 0) {
+      const completedIds = await LessonProgress.distinct("lessonId", {
+        userId: req.user._id,
+        lessonId: { $in: lessonsInSubject.map((l) => l._id) },
+      });
+      const completedSet = new Set(completedIds.map((id) => id.toString()));
+      const unreadLessons = lessonsInSubject.filter((l) => !completedSet.has(l._id.toString()));
+
+      if (unreadLessons.length > 0) {
+        return res.status(403).json({
+          message: "Please read the lesson content for this topic before attempting the quiz.",
+          unreadLessons: unreadLessons.map((l) => ({ _id: l._id, title: l.title })),
+        });
+      }
     }
 
     const allQuestions = await Question.find({ quizId, isPublished: true });

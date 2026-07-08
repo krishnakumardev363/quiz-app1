@@ -20,8 +20,6 @@ const XP_PACKAGES = [
 
 const getRazorpayInstance = () => {
   if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) return null;
-  console.log("Razorpay instance created with key_id:", process.env.RAZORPAY_KEY_ID);
-  console.log("Razorpay instance created with key_secret:", process.env.RAZORPAY_KEY_SECRET);
   return new Razorpay({
     key_id: process.env.RAZORPAY_KEY_ID,
     key_secret: process.env.RAZORPAY_KEY_SECRET,
