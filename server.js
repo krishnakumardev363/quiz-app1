@@ -28,6 +28,7 @@ const app = express();
 // source of CORS mismatches that are hard to spot visually.
 const allowedOrigin = (process.env.CLIENT_URL || "http://localhost:5173").trim().replace(/\/$/, "");
 
+
 // Middleware
 app.use(express.json());
 app.use(cookieParser());
@@ -66,6 +67,7 @@ const httpServer = createServer(app);
 // Trim any accidental whitespace/trailing slash from the env var - a common
 // source of CORS mismatches that are hard to spot visually.
 // const allowedOrigin = (process.env.CLIENT_URL || "http://localhost:5173").trim().replace(/\/$/, "");
+
 
 const io = new Server(httpServer, {
   cors: {
