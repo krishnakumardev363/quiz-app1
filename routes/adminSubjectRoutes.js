@@ -4,7 +4,7 @@ import { protect, authorizeRoles } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-router.use(protect, authorizeRoles("admin"));
+router.use(protect, authorizeRoles("admin", "staff"));
 
 // POST /api/admin/subjects - create subject
 router.post("/", async (req, res) => {

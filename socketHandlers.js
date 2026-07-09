@@ -4,6 +4,7 @@ import Question from "./models/Question.js";
 import Quiz from "./models/Quiz.js";
 import Subject from "./models/Subject.js";
 import Result from "./models/Result.js";
+import Course from "./models/Course.js";
 
 // In-memory room store. Fine for a college project / single-server setup.
 // Shape: { [roomCode]: { hostSocketId, quizId, courseId, quizTitle, players: [{socketId, userId, name, score, correctCount, wrongCount, skippedCount, hasAnsweredCurrent}], status, questions, currentIndex, questionStartTime } }
@@ -65,7 +66,7 @@ export default function registerSocketHandlers(io) {
     socket.on("create-room", async ({ quizId }) => {
       try {
         const user = await getUserFromSocket(socket);
-        if (!user || user.role !== "admin") {
+        if (!user || !["admin", "staff"].includes(user.role)) {
           socket.emit("room-error", {
             message: "Only admins/instructors can host a live quiz room.",
           });
@@ -76,6 +77,19 @@ export default function registerSocketHandlers(io) {
         if (!quiz) {
           socket.emit("room-error", { message: "Quiz not found" });
           return;
+        }
+
+        // Staff can only host quizzes that belong to THEIR OWN courses.
+        // Admin (super admin) can host any quiz, including staff's private ones.
+        if (user.role === "staff") {
+          const subjectForCheck = await Subject.findById(quiz.subjectId);
+          const courseForCheck = subjectForCheck
+            ? await Course.findById(subjectForCheck.courseId)
+            : null;
+          if (!courseForCheck || courseForCheck.instructorId.toString() !== user._id.toString()) {
+            socket.emit("room-error", { message: "You can only host quizzes from your own courses." });
+            return;
+          }
         }
 
         const questions = await Question.find({ quizId, isPublished: true });

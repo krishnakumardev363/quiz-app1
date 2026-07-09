@@ -6,7 +6,7 @@ import { protect, authorizeRoles } from "../middleware/authMiddleware.js";
 const router = express.Router();
 
 // Admin only - generating and reviewing AI questions is an admin task
-router.use(protect, authorizeRoles("admin"));
+router.use(protect, authorizeRoles("admin", "staff"));
 
 // ---------------------------------------------
 // POST /api/admin/ai-questions/generate

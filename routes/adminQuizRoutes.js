@@ -5,7 +5,7 @@ import { protect, authorizeRoles } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-router.use(protect, authorizeRoles("admin"));
+router.use(protect, authorizeRoles("admin", "staff"));
 
 // POST /api/admin/quizzes - create quiz
 router.post("/", async (req, res) => {

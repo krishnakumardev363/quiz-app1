@@ -33,6 +33,14 @@ const courseSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    visibility: {
+      // "public" - shows in student course catalog
+      // "private" - hidden from students entirely; only accessible via a
+      // multiplayer room code shared by the staff/admin who created it
+      type: String,
+      enum: ["public", "private"],
+      default: "public",
+    },
   },
   { timestamps: true }
 );

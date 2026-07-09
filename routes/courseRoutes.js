@@ -17,7 +17,9 @@ router.use(protect);
 // ---------------------------------------------
 router.get("/", async (req, res) => {
   try {
-    const courses = await Course.find({ isPublished: true }).sort({ createdAt: -1 });
+    const courses = await Course.find({ isPublished: true, visibility: "public" }).sort({
+      createdAt: -1,
+    });
     res.status(200).json(courses);
   } catch (error) {
     res.status(500).json({ message: "Error fetching courses", error: error.message });
@@ -73,6 +75,15 @@ router.get("/:id", async (req, res) => {
     const course = await Course.findById(req.params.id);
     if (!course) {
       return res.status(404).json({ message: "Course not found" });
+    }
+
+    // Private courses are only visible to their creator or a super admin -
+    // regular students only ever reach a private course's quiz via a
+    // multiplayer room code, never through normal browsing.
+    const isOwner = course.instructorId.toString() === req.user._id.toString();
+    const isSuperAdmin = req.user.role === "admin";
+    if (course.visibility === "private" && !isOwner && !isSuperAdmin) {
+      return res.status(403).json({ message: "This course is private." });
     }
 
     const subjects = await Subject.find({ courseId: course._id }).sort({ order: 1 });

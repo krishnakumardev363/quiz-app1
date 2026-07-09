@@ -6,7 +6,7 @@ import { protect, authorizeRoles } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-router.use(protect, authorizeRoles("admin"));
+router.use(protect, authorizeRoles("admin", "staff"));
 
 // Helper: recalculate totalQuestions count on the quiz
 const updateQuizQuestionCount = async (quizId) => {
@@ -87,9 +87,9 @@ router.delete("/:id", async (req, res) => {
 });
 
 // ---------------------------------------------
-// GET /api/admin/questions/results/all - admin view of ALL quiz results, most recent first
+// GET /api/admin/questions/results/all - SUPER ADMIN ONLY (platform-wide oversight)
 // ---------------------------------------------
-router.get("/results/all", async (req, res) => {
+router.get("/results/all", authorizeRoles("admin"), async (req, res) => {
   try {
     const results = await Result.find()
       .populate("userId", "name email")
@@ -104,9 +104,9 @@ router.get("/results/all", async (req, res) => {
 });
 
 // ---------------------------------------------
-// DELETE /api/admin/questions/results/:id - delete a specific result entry
+// DELETE /api/admin/questions/results/:id - SUPER ADMIN ONLY
 // ---------------------------------------------
-router.delete("/results/:id", async (req, res) => {
+router.delete("/results/:id", authorizeRoles("admin"), async (req, res) => {
   try {
     const result = await Result.findByIdAndDelete(req.params.id);
     if (!result) {
