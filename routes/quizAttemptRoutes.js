@@ -31,21 +31,24 @@ router.get("/:quizId/start", async (req, res) => {
       return res.status(404).json({ message: "Quiz not found" });
     }
 
-    // Gate: student must have read every lesson in this quiz's subject first
-    const lessonsInSubject = await Lesson.find({ subjectId: quiz.subjectId });
-    if (lessonsInSubject.length > 0) {
-      const completedIds = await LessonProgress.distinct("lessonId", {
-        userId: req.user._id,
-        lessonId: { $in: lessonsInSubject.map((l) => l._id) },
-      });
-      const completedSet = new Set(completedIds.map((id) => id.toString()));
-      const unreadLessons = lessonsInSubject.filter((l) => !completedSet.has(l._id.toString()));
-
-      if (unreadLessons.length > 0) {
-        return res.status(403).json({
-          message: "Please read the lesson content for this topic before attempting the quiz.",
-          unreadLessons: unreadLessons.map((l) => ({ _id: l._id, title: l.title })),
+    // Gate: student must have read every lesson in this quiz's subject first.
+    // Admin/staff manage their own courses and shouldn't be blocked by this.
+    if (req.user.role === "student") {
+      const lessonsInSubject = await Lesson.find({ subjectId: quiz.subjectId });
+      if (lessonsInSubject.length > 0) {
+        const completedIds = await LessonProgress.distinct("lessonId", {
+          userId: req.user._id,
+          lessonId: { $in: lessonsInSubject.map((l) => l._id) },
         });
+        const completedSet = new Set(completedIds.map((id) => id.toString()));
+        const unreadLessons = lessonsInSubject.filter((l) => !completedSet.has(l._id.toString()));
+
+        if (unreadLessons.length > 0) {
+          return res.status(403).json({
+            message: "Please read the lesson content for this topic before attempting the quiz.",
+            unreadLessons: unreadLessons.map((l) => ({ _id: l._id, title: l.title })),
+          });
+        }
       }
     }
 

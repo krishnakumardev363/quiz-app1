@@ -5,7 +5,6 @@ import Subject from "../models/Subject.js";
 import Quiz from "../models/Quiz.js";
 import Lesson from "../models/Lesson.js";
 import LessonProgress from "../models/LessonProgress.js";
-// import Result from "../models/Result.js";
 import Result from "../models/Result.js";
 import { protect } from "../middleware/authMiddleware.js";
 
@@ -124,7 +123,11 @@ router.get("/:id", async (req, res) => {
           };
         });
 
-        const allLessonsRead = lessonsWithStatus.every((l) => l.isRead);
+        // Admin/staff manage their own courses - they shouldn't be locked out
+        // of hosting or testing their own quizzes just because they haven't
+        // personally clicked through the lesson reader like a student would.
+        const allLessonsRead =
+          req.user.role !== "student" || lessonsWithStatus.every((l) => l.isRead);
 
         return {
           ...subject.toObject(),
