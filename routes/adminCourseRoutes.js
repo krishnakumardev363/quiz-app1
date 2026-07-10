@@ -9,11 +9,20 @@ const router = express.Router();
 router.use(protect, authorizeRoles("admin", "staff"));
 
 // Helper: verify the requesting user owns this course, unless they're admin
+// const canManageCourse = (course, user) => {
+//   if (user.role === "admin") return true;
+//   return course.instructorId.toString() === user._id.toString();
+// };
+// Helper: verify the requesting user owns this course, unless they're admin.
+// Handles instructorId whether it's a raw ObjectId or a populated subdocument
+// (e.g. after .populate("instructorId", "name")).
 const canManageCourse = (course, user) => {
   if (user.role === "admin") return true;
-  return course.instructorId.toString() === user._id.toString();
+  const ownerId = course.instructorId?._id
+    ? course.instructorId._id.toString()
+    : course.instructorId.toString();
+  return ownerId === user._id.toString();
 };
-
 // POST /api/admin/courses - create course
 router.post("/", async (req, res) => {
   try {
@@ -51,6 +60,21 @@ router.get("/", async (req, res) => {
     res.status(500).json({ message: "Error fetching courses", error: error.message });
   }
 });
+// // adminCourseRoutes.js
+// router.get("/:id", async (req, res) => {
+//   try {
+//     const course = await Course.findById(req.params.id).populate("instructorId", "name");
+//     //                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+//     if (!course) {
+//       return res.status(404).json({ message: "Course not found" });
+//     }
+//     if (!canManageCourse(course, req.user)) {   // ← this always fails for staff now
+//       return res.status(403).json({ message: "You don't have access to this course" });
+//     }
+//   } catch (error) {
+//     res.status(500).json({ message: "Error fetching course", error: error.message });
+//   }
+// });
 
 // GET /api/admin/courses/:id - get single course
 router.get("/:id", async (req, res) => {
