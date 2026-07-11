@@ -54,7 +54,14 @@ router.post("/create-order", async (req, res) => {
     const order = await razorpay.orders.create({
       amount: pkg.amountInr * 100, // paise
       currency: "INR",
-      receipt: `xp_${req.user._id}_${Date.now()}`,
+      // ============ RECEIPT LENGTH FIX ============
+      // Razorpay's `receipt` field has a hard 40-character limit. The old
+      // version (`xp_` + full 24-char ObjectId + `_` + 13-digit timestamp)
+      // was 41 characters - 1 over the limit - so every single order
+      // creation was rejected by Razorpay's API. Using the last 6 hex
+      // chars of the ObjectId keeps this well under 40 while still being
+      // unique enough per user+timestamp for a reference id.
+      receipt: `xp_${req.user._id.toString().slice(-6)}_${Date.now()}`,
     });
 
     await XpPurchase.create({
@@ -73,6 +80,7 @@ router.post("/create-order", async (req, res) => {
       package: pkg,
     });
   } catch (error) {
+    console.error("Razorpay create-order failed:", error);
     res.status(500).json({ message: "Error creating payment order", error: error.message });
   }
 });
