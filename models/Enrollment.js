@@ -16,6 +16,13 @@ const enrollmentSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    // Tracks whether the XP cost for this course's certificate has already
+    // been paid, so re-downloading the certificate later never charges XP
+    // again.
+    certificateUnlocked: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );

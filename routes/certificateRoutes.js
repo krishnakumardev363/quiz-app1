@@ -32,12 +32,35 @@ router.get("/:courseId", async (req, res) => {
       return res.status(404).json({ message: "Course not found" });
     }
 
-    if (course.certificateXpRequired > 0 && req.user.xp < course.certificateXpRequired) {
-      return res.status(402).json({
-        message: `This certificate requires ${course.certificateXpRequired} XP. You currently have ${req.user.xp} XP. Earn more by completing quizzes or buy XP from the XP Store.`,
-        xpRequired: course.certificateXpRequired,
-        currentXp: req.user.xp,
-      });
+    // ============ CHARGE XP FOR THE CERTIFICATE (only once, ever) ============
+    // Previously this only CHECKED xp >= certificateXpRequired and never
+    // actually deducted it, so certificates were effectively free forever
+    // once a user crossed the threshold once. Now: if this enrollment
+    // hasn't paid yet, verify balance, atomically claim the "paid" flag
+    // (prevents double-charging on a double-click/concurrent request), then
+    // deduct XP. Already-unlocked certificates redownload for free - you
+    // only pay once per course.
+    if (course.certificateXpRequired > 0 && !enrollment.certificateUnlocked) {
+      if (req.user.xp < course.certificateXpRequired) {
+        return res.status(402).json({
+          message: `This certificate requires ${course.certificateXpRequired} XP. You currently have ${req.user.xp} XP. Earn more by completing quizzes or buy XP from the XP Store.`,
+          xpRequired: course.certificateXpRequired,
+          currentXp: req.user.xp,
+        });
+      }
+
+      const claimed = await Enrollment.findOneAndUpdate(
+        { _id: enrollment._id, certificateUnlocked: { $ne: true } },
+        { certificateUnlocked: true },
+        { new: true }
+      );
+
+      // claimed is null if another concurrent request already flipped this
+      // flag first (e.g. a double-click) - in that case, skip charging again.
+      if (claimed) {
+        req.user.xp -= course.certificateXpRequired;
+        await req.user.save();
+      }
     }
 
     res.setHeader("Content-Type", "application/pdf");
