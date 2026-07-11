@@ -94,14 +94,30 @@ router.post("/generate-ai", async (req, res) => {
       return res.status(400).json({ message: "subjectId and topic are required" });
     }
 
-    const prompt = `Write clear, well-structured study material for students on the topic: "${topic}".
+    // ============ TOPIC LENGTH GUARD ============
+    // "topic" is meant to be a short subject like "What is Data Science".
+    // Without a cap, someone can paste an entire multi-lesson generation
+    // prompt in here, which then gets embedded into the Gemini prompt
+    // below and frequently gets echoed back verbatim inside the response -
+    // corrupting the saved lesson content with duplicated prompt text.
+    const trimmedTopic = topic.trim();
+    if (trimmedTopic.length > 150) {
+      return res.status(400).json({
+        message:
+          "Topic is too long (max 150 characters). Enter a short topic like \"What is Data Science\", not full instructions - this field only generates ONE lesson at a time.",
+      });
+    }
+
+    const prompt = `Write clear, well-structured study material for students on the topic: "${trimmedTopic}".
 
 Format it in plain text with:
 - A short introduction (2-3 sentences)
 - 3-5 key concepts, each with a short heading and a 2-4 sentence explanation
 - A brief summary at the end
 
-Do not use markdown symbols like # or **. Keep it readable as plain paragraphs with line breaks between sections. Keep the total length moderate (around 300-500 words) - concise enough for a student to read in a few minutes.`;
+Do not use markdown symbols like # or **. Keep it readable as plain paragraphs with line breaks between sections. Keep the total length moderate (around 300-500 words) - concise enough for a student to read in a few minutes.
+
+IMPORTANT: Do not repeat, restate, quote, or reference this instruction or the topic string itself anywhere in your output. Output ONLY the finished study material text - no preamble, no "Here is the study material for...", no echoing the topic or these instructions.`;
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
@@ -128,7 +144,7 @@ Do not use markdown symbols like # or **. Keep it readable as plain paragraphs w
 
     const lesson = await Lesson.create({
       subjectId,
-      title: topic,
+      title: trimmedTopic,
       content: content.trim(),
       source: "ai",
     });
