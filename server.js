@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 import cors from "cors";
+import helmet from "helmet";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import authRoutes from "./routes/authRoutes.js";
@@ -28,7 +29,13 @@ const app = express();
 // source of CORS mismatches that are hard to spot visually.
 const allowedOrigin = (process.env.CLIENT_URL || "http://localhost:5173").trim().replace(/\/$/, "");
 
+
 // Middleware
+// Security headers - CSP disabled since this is a pure JSON/PDF API with
+// no HTML views to protect; the other headers (clickjacking, MIME-sniffing,
+// etc.) still apply.
+app.use(helmet({ contentSecurityPolicy: false }));
+
 app.use(express.json());
 app.use(cookieParser());
 app.use(
@@ -66,6 +73,7 @@ const httpServer = createServer(app);
 // Trim any accidental whitespace/trailing slash from the env var - a common
 // source of CORS mismatches that are hard to spot visually.
 // const allowedOrigin = (process.env.CLIENT_URL || "http://localhost:5173").trim().replace(/\/$/, "");
+
 
 const io = new Server(httpServer, {
   cors: {
