@@ -101,7 +101,16 @@ router.post("/verify-payment", async (req, res) => {
       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
       .digest("hex");
 
-    if (expectedSignature !== razorpay_signature) {
+    // ============ TIMING-SAFE SIGNATURE COMPARISON ============
+    // crypto.timingSafeEqual instead of !== avoids leaking timing
+    // information about how many leading characters matched.
+    const expectedBuffer = Buffer.from(expectedSignature);
+    const providedBuffer = Buffer.from(razorpay_signature);
+    const signatureValid =
+      expectedBuffer.length === providedBuffer.length &&
+      crypto.timingSafeEqual(expectedBuffer, providedBuffer);
+
+    if (!signatureValid) {
       await XpPurchase.findOneAndUpdate(
         { razorpayOrderId: razorpay_order_id },
         { status: "failed" }
@@ -113,6 +122,15 @@ router.post("/verify-payment", async (req, res) => {
     if (!purchase) {
       return res.status(404).json({ message: "Order not found" });
     }
+
+    // ============ OWNERSHIP CHECK ============
+    // Defense-in-depth: even though a valid signature already proves this
+    // payment is genuine, also confirm the order actually belongs to
+    // whoever is currently logged in before crediting XP to their account.
+    if (purchase.userId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "This order does not belong to your account" });
+    }
+
     if (purchase.status === "paid") {
       return res.status(400).json({ message: "This order has already been processed" });
     }
@@ -121,6 +139,9 @@ router.post("/verify-payment", async (req, res) => {
     purchase.razorpayPaymentId = razorpay_payment_id;
     await purchase.save();
 
+    // Credit the purchase's own owner explicitly (now guaranteed to be
+    // req.user thanks to the ownership check above, but stated explicitly
+    // rather than relying on req.user for clarity).
     req.user.xp += purchase.xpPurchased;
     await req.user.save();
 

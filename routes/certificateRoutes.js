@@ -1,8 +1,13 @@
 import express from "express";
 import PDFDocument from "pdfkit";
+import path from "path";
+import { fileURLToPath } from "url";
 import Enrollment from "../models/Enrollment.js";
 import Course from "../models/Course.js";
 import { protect } from "../middleware/authMiddleware.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const SIGNATURE_PATH = path.join(__dirname, "..", "assets", "founder-signature.png");
 
 const router = express.Router();
 
@@ -77,126 +82,216 @@ router.get("/:courseId", async (req, res) => {
     const centerX = pageWidth / 2;
 
     // Certificate ID - short, unique-ish, based on user + course + timestamp
-    const certId = `QZ-${req.user._id.toString().slice(-6).toUpperCase()}-${courseId
+    const certId = `TT-${req.user._id.toString().slice(-6).toUpperCase()}-${courseId
       .toString()
       .slice(-4)
       .toUpperCase()}`;
 
-    // Background wash
-    doc.rect(0, 0, pageWidth, pageHeight).fill("#FAFBFF");
+    // ============ BACKGROUND ============
+    doc.rect(0, 0, pageWidth, pageHeight).fill("#FDFCF7");
 
-    // Outer decorative border (double line)
-    doc.rect(24, 24, pageWidth - 48, pageHeight - 48).lineWidth(2.5).stroke("#0066FF");
-    doc.rect(32, 32, pageWidth - 64, pageHeight - 64).lineWidth(0.75).stroke("#93C5FD");
+    // Faint rotated watermark wordmark - classic security-print touch,
+    // subtle enough not to compete with the real content.
+    doc.save();
+    doc.rotate(-32, { origin: [centerX, pageHeight / 2] });
+    doc.fontSize(110).font("Helvetica-Bold");
+    const watermarkText = "TINORATECH";
+    const watermarkWidth = doc.widthOfString(watermarkText, { characterSpacing: 4 });
+    doc
+      .fillColor("#F0EEE3")
+      .text(watermarkText, centerX - watermarkWidth / 2, pageHeight / 2 - 55, {
+        lineBreak: false,
+        characterSpacing: 4,
+      });
+    doc.restore();
 
-    // Corner accents (small squares) for a formal engraved look
-    const cornerSize = 14;
-    [
-      [40, 40],
-      [pageWidth - 40 - cornerSize, 40],
-      [40, pageHeight - 40 - cornerSize],
-      [pageWidth - 40 - cornerSize, pageHeight - 40 - cornerSize],
-    ].forEach(([x, y]) => {
-      doc.rect(x, y, cornerSize, cornerSize).lineWidth(1.5).stroke("#0066FF");
-    });
+    // Fine concentric-ring guilloche texture, very low opacity, centered
+    // behind the seal area - the kind of fine engraved detail real
+    // certificates use, without being visually loud.
+    doc.save();
+    doc.opacity(0.05);
+    for (let r = 10; r <= 90; r += 8) {
+      doc.circle(pageWidth - 150, pageHeight - 130, r).lineWidth(0.5).stroke("#0066FF");
+    }
+    doc.restore();
+
+    // ============ TRIPLE BORDER (gold / navy / gold) ============
+    doc.rect(20, 20, pageWidth - 40, pageHeight - 40).lineWidth(1).stroke("#C9A24B");
+    doc.rect(27, 27, pageWidth - 54, pageHeight - 54).lineWidth(2.5).stroke("#0B1F44");
+    doc.rect(34, 34, pageWidth - 68, pageHeight - 68).lineWidth(0.75).stroke("#C9A24B");
+
+    // ============ ORNAMENTAL CORNER FLOURISHES ============
+    // Quarter-circle flourish + small diamond accent at each corner,
+    // mirrored appropriately, replacing the old plain squares.
+    const drawCornerFlourish = (x, y, flipX, flipY) => {
+      const sx = flipX ? -1 : 1;
+      const sy = flipY ? -1 : 1;
+      doc.save();
+      doc.translate(x, y).scale(sx, sy);
+      doc
+        .moveTo(0, 26)
+        .bezierCurveTo(0, 10, 10, 0, 26, 0)
+        .lineWidth(1.2)
+        .stroke("#C9A24B");
+      doc
+        .moveTo(0, 16)
+        .bezierCurveTo(0, 7, 7, 0, 16, 0)
+        .lineWidth(1)
+        .stroke("#0B1F44");
+      // small diamond accent
+      doc
+        .moveTo(13, 30)
+        .lineTo(17, 34)
+        .lineTo(13, 38)
+        .lineTo(9, 34)
+        .closePath()
+        .fill("#C9A24B");
+      doc.restore();
+    };
+    drawCornerFlourish(44, 44, false, false);
+    drawCornerFlourish(pageWidth - 44, 44, true, false);
+    drawCornerFlourish(44, pageHeight - 44, false, true);
+    drawCornerFlourish(pageWidth - 44, pageHeight - 44, true, true);
+
+    // ============ HEADER ORNAMENT ============
+    doc.moveTo(centerX - 90, 52).lineTo(centerX - 14, 52).lineWidth(0.75).stroke("#C9A24B");
+    doc.moveTo(centerX + 14, 52).lineTo(centerX + 90, 52).lineWidth(0.75).stroke("#C9A24B");
+    doc
+      .moveTo(centerX, 47)
+      .lineTo(centerX + 5, 52)
+      .lineTo(centerX, 57)
+      .lineTo(centerX - 5, 52)
+      .closePath()
+      .fill("#C9A24B");
 
     // Platform brand
     doc
-      .fontSize(20)
-      .fillColor("#0066FF")
+      .fontSize(21)
+      .fillColor("#0B1F44")
       .font("Helvetica-Bold")
-      .text("QUIZERA", 0, 58, { align: "center", characterSpacing: 3 });
+      .text("TINORATECH", 0, 64, { align: "center", characterSpacing: 3 });
 
     doc
       .fontSize(9)
       .fillColor("#9CA3AF")
       .font("Helvetica")
-      .text("LEARN. QUIZ. ACHIEVE.", 0, 82, { align: "center", characterSpacing: 2 });
+      .text("LEARN. QUIZ. ACHIEVE.", 0, 88, { align: "center", characterSpacing: 2 });
 
-    // Title
+    // Title (classic serif for a formal certificate feel)
     doc
-      .fontSize(13)
-      .fillColor("#111111")
-      .font("Helvetica-Bold")
-      .text("CERTIFICATE OF COMPLETION", 0, 118, { align: "center", characterSpacing: 2 });
+      .fontSize(15)
+      .fillColor("#0B1F44")
+      .font("Times-Bold")
+      .text("CERTIFICATE OF COMPLETION", 0, 124, { align: "center", characterSpacing: 2.5 });
 
-    // Decorative rule under title
+    // Decorative rule under title with diamond center
+    doc.moveTo(centerX - 70, 150).lineTo(centerX - 8, 150).lineWidth(1).stroke("#C9A24B");
+    doc.moveTo(centerX + 8, 150).lineTo(centerX + 70, 150).lineWidth(1).stroke("#C9A24B");
     doc
-      .moveTo(centerX - 60, 142)
-      .lineTo(centerX + 60, 142)
-      .lineWidth(1.5)
-      .stroke("#0066FF");
+      .moveTo(centerX, 146)
+      .lineTo(centerX + 4, 150)
+      .lineTo(centerX, 154)
+      .lineTo(centerX - 4, 150)
+      .closePath()
+      .fill("#C9A24B");
 
     doc
       .fontSize(13)
       .fillColor("#666666")
-      .font("Helvetica")
-      .text("This certificate is proudly presented to", 0, 160, { align: "center" });
+      .font("Times-Italic")
+      .text("This certificate is proudly presented to", 0, 168, { align: "center" });
 
     doc
-      .fontSize(34)
-      .fillColor("#111111")
-      .font("Helvetica-Bold")
-      .text(req.user.name, 0, 192, { align: "center" });
+      .fontSize(36)
+      .fillColor("#0B1F44")
+      .font("Times-Bold")
+      .text(req.user.name, 0, 198, { align: "center" });
 
     // Underline beneath the name
-    const nameWidth = doc.widthOfString(req.user.name, { font: "Helvetica-Bold", fontSize: 34 });
+    const nameWidth = doc.widthOfString(req.user.name, { font: "Times-Bold", fontSize: 36 });
     doc
-      .moveTo(centerX - nameWidth / 2 - 10, 234)
-      .lineTo(centerX + nameWidth / 2 + 10, 234)
+      .moveTo(centerX - nameWidth / 2 - 14, 240)
+      .lineTo(centerX + nameWidth / 2 + 14, 240)
       .lineWidth(1)
-      .stroke("#D1D5DB");
+      .stroke("#C9A24B");
 
     doc
       .fontSize(13)
       .fillColor("#666666")
-      .font("Helvetica")
-      .text("for successfully completing the course", 0, 250, { align: "center" });
+      .font("Times-Italic")
+      .text("for successfully completing the course", 0, 256, { align: "center" });
 
     doc
-      .fontSize(21)
+      .fontSize(22)
       .fillColor("#0066FF")
-      .font("Helvetica-Bold")
-      .text(course.title, 60, 274, { align: "center", width: pageWidth - 120 });
+      .font("Times-Bold")
+      .text(course.title, 60, 280, { align: "center", width: pageWidth - 120 });
 
-    // Seal / badge (circle with ribbon-like shape using two triangles)
+    // ============ GOLD MEDALLION SEAL, laurel-framed ============
     const sealX = pageWidth - 150;
     const sealY = pageHeight - 130;
-    doc.circle(sealX, sealY, 34).lineWidth(2).stroke("#0066FF");
-    doc.circle(sealX, sealY, 27).fillOpacity(1).fill("#0066FF");
+
+    // Laurel leaves - small ellipses arranged along a curve on each side
+    const drawLaurel = (mirror) => {
+      const s = mirror ? -1 : 1;
+      for (let i = 0; i < 7; i++) {
+        const angle = (Math.PI / 2.6) * (i / 6) + Math.PI / 2.3;
+        const lx = sealX + s * (44 + i * 3.2) * Math.cos(angle - Math.PI / 2);
+        const ly = sealY + (44 + i * 3.2) * Math.sin(angle - Math.PI / 2) + 6;
+        doc.save();
+        doc.translate(lx, ly).rotate(s * (30 + i * 6));
+        doc.ellipse(0, 0, 6, 2.4).fill("#C9A24B");
+        doc.restore();
+      }
+    };
+    drawLaurel(false);
+    drawLaurel(true);
+
+    doc.circle(sealX, sealY, 34).lineWidth(2).stroke("#C9A24B");
+    doc.circle(sealX, sealY, 29).lineWidth(1).stroke("#0B1F44");
+    doc.circle(sealX, sealY, 25).fillOpacity(1).fill("#0B1F44");
     doc
-      .fillColor("#FFFFFF")
-      .fontSize(9)
-      .font("Helvetica-Bold")
-      .text("QZ", sealX - 10, sealY - 6, { width: 20, align: "center" });
+      .fillColor("#C9A24B")
+      .fontSize(11)
+      .font("Times-Bold")
+      .text("TT", sealX - 12, sealY - 7, { width: 24, align: "center" });
     // Ribbon tails
     doc
       .moveTo(sealX - 12, sealY + 26)
       .lineTo(sealX - 20, sealY + 50)
       .lineTo(sealX - 4, sealY + 40)
       .closePath()
-      .fill("#0066FF");
+      .fill("#0B1F44");
     doc
       .moveTo(sealX + 12, sealY + 26)
       .lineTo(sealX + 20, sealY + 50)
       .lineTo(sealX + 4, sealY + 40)
       .closePath()
-      .fill("#0052CC");
+      .fill("#C9A24B");
 
-    // Signature line (left side, bottom)
+    // ============ SIGNATURE BLOCK ============
     const sigX = 150;
     const sigY = pageHeight - 100;
-    doc.moveTo(sigX - 70, sigY).lineTo(sigX + 70, sigY).lineWidth(1).stroke("#9CA3AF");
+
+    const sigImgWidth = 120;
+    const sigImgAspect = 630 / 1455; // height/width of the real founder signature PNG
+    const sigImgHeight = sigImgWidth * sigImgAspect;
+    doc.image(SIGNATURE_PATH, sigX - sigImgWidth / 2, sigY - sigImgHeight - 4, {
+      width: sigImgWidth,
+      height: sigImgHeight,
+    });
+
+    doc.moveTo(sigX - 70, sigY).lineTo(sigX + 70, sigY).lineWidth(1).stroke("#C9A24B");
     doc
       .fontSize(11)
-      .fillColor("#111111")
-      .font("Helvetica-Bold")
-      .text("Quizera Team", sigX - 70, sigY + 6, { width: 140, align: "center" });
+      .fillColor("#0B1F44")
+      .font("Times-Bold")
+      .text("CEO & Founder", sigX - 70, sigY + 6, { width: 140, align: "center" });
     doc
       .fontSize(8)
       .fillColor("#9CA3AF")
       .font("Helvetica")
-      .text("Authorized Signature", sigX - 70, sigY + 20, { width: 140, align: "center" });
+      .text("Tinoratech", sigX - 70, sigY + 20, { width: 140, align: "center" });
 
     // Issue date + certificate ID (bottom center-left area, below course title)
     doc

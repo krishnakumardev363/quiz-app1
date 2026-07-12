@@ -5,8 +5,10 @@ import Subject from "../models/Subject.js";
 import Quiz from "../models/Quiz.js";
 import Lesson from "../models/Lesson.js";
 import LessonProgress from "../models/LessonProgress.js";
+// import Result from "../models/Result.js";
 import Result from "../models/Result.js";
 import { protect } from "../middleware/authMiddleware.js";
+import { hasCourseAccess } from "../utils/courseAccess.js";
 
 const router = express.Router();
 
@@ -86,6 +88,21 @@ router.get("/:id", async (req, res) => {
       return res.status(403).json({ message: "This course is private." });
     }
 
+    // ============ ENROLLMENT GATE ============
+    // Previously this endpoint returned full subjects/lessons/quizzes to
+    // ANY logged-in user, enrolled or not. Now: owner and admin bypass
+    // freely (preview/management), everyone else must have actually
+    // enrolled first.
+    if (!isOwner && !isSuperAdmin) {
+      const allowed = await hasCourseAccess(course, req.user);
+      if (!allowed) {
+        return res.status(403).json({
+          message: "Please enroll in this course to view its content.",
+          requiresEnrollment: true,
+        });
+      }
+    }
+
     const subjects = await Subject.find({ courseId: course._id }).sort({ order: 1 });
 
     // Get logged-in user's best score % for every quiz, so the frontend can mark
@@ -123,11 +140,7 @@ router.get("/:id", async (req, res) => {
           };
         });
 
-        // Admin/staff manage their own courses - they shouldn't be locked out
-        // of hosting or testing their own quizzes just because they haven't
-        // personally clicked through the lesson reader like a student would.
-        const allLessonsRead =
-          req.user.role !== "student" || lessonsWithStatus.every((l) => l.isRead);
+        const allLessonsRead = lessonsWithStatus.every((l) => l.isRead);
 
         return {
           ...subject.toObject(),
@@ -234,6 +247,24 @@ router.get("/lessons/:lessonId", async (req, res) => {
     if (!lesson) {
       return res.status(404).json({ message: "Lesson not found" });
     }
+
+    // ============ ENROLLMENT GATE ============
+    const subject = await Subject.findById(lesson.subjectId);
+    const course = subject ? await Course.findById(subject.courseId) : null;
+    if (!course) {
+      return res.status(404).json({ message: "Course not found for this lesson" });
+    }
+    const isOwner = course.instructorId.toString() === req.user._id.toString();
+    if (req.user.role !== "admin" && !isOwner) {
+      const allowed = await hasCourseAccess(course, req.user);
+      if (!allowed) {
+        return res.status(403).json({
+          message: "Please enroll in this course to view its lessons.",
+          requiresEnrollment: true,
+        });
+      }
+    }
+
     res.status(200).json(lesson);
   } catch (error) {
     res.status(500).json({ message: "Error fetching lesson", error: error.message });
@@ -248,6 +279,23 @@ router.post("/lessons/:lessonId/complete", async (req, res) => {
     const lesson = await Lesson.findById(req.params.lessonId);
     if (!lesson) {
       return res.status(404).json({ message: "Lesson not found" });
+    }
+
+    // ============ ENROLLMENT GATE ============
+    const subject = await Subject.findById(lesson.subjectId);
+    const course = subject ? await Course.findById(subject.courseId) : null;
+    if (!course) {
+      return res.status(404).json({ message: "Course not found for this lesson" });
+    }
+    const isOwner = course.instructorId.toString() === req.user._id.toString();
+    if (req.user.role !== "admin" && !isOwner) {
+      const allowed = await hasCourseAccess(course, req.user);
+      if (!allowed) {
+        return res.status(403).json({
+          message: "Please enroll in this course first.",
+          requiresEnrollment: true,
+        });
+      }
     }
 
     await LessonProgress.findOneAndUpdate(

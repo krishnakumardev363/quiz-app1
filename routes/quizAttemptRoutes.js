@@ -6,7 +6,9 @@ import Subject from "../models/Subject.js";
 import Lesson from "../models/Lesson.js";
 import LessonProgress from "../models/LessonProgress.js";
 import Enrollment from "../models/Enrollment.js";
+import Course from "../models/Course.js";
 import { protect } from "../middleware/authMiddleware.js";
+import { hasCourseAccess } from "../utils/courseAccess.js";
 import { shuffleArray, getNextDifficulty, pickQuestionByDifficulty } from "../utils/adaptiveDifficulty.js";
 
 const router = express.Router();
@@ -31,24 +33,39 @@ router.get("/:quizId/start", async (req, res) => {
       return res.status(404).json({ message: "Quiz not found" });
     }
 
-    // Gate: student must have read every lesson in this quiz's subject first.
-    // Admin/staff manage their own courses and shouldn't be blocked by this.
-    if (req.user.role === "student") {
-      const lessonsInSubject = await Lesson.find({ subjectId: quiz.subjectId });
-      if (lessonsInSubject.length > 0) {
-        const completedIds = await LessonProgress.distinct("lessonId", {
-          userId: req.user._id,
-          lessonId: { $in: lessonsInSubject.map((l) => l._id) },
-        });
-        const completedSet = new Set(completedIds.map((id) => id.toString()));
-        const unreadLessons = lessonsInSubject.filter((l) => !completedSet.has(l._id.toString()));
-
-        if (unreadLessons.length > 0) {
+    // ============ ENROLLMENT GATE ============
+    const subjectForAccess = await Subject.findById(quiz.subjectId);
+    const courseForAccess = subjectForAccess
+      ? await Course.findById(subjectForAccess.courseId)
+      : null;
+    if (courseForAccess) {
+      const isOwner = courseForAccess.instructorId.toString() === req.user._id.toString();
+      if (req.user.role !== "admin" && !isOwner) {
+        const allowed = await hasCourseAccess(courseForAccess, req.user);
+        if (!allowed) {
           return res.status(403).json({
-            message: "Please read the lesson content for this topic before attempting the quiz.",
-            unreadLessons: unreadLessons.map((l) => ({ _id: l._id, title: l.title })),
+            message: "Please enroll in this course before attempting its quizzes.",
+            requiresEnrollment: true,
           });
         }
+      }
+    }
+
+    // Gate: student must have read every lesson in this quiz's subject first
+    const lessonsInSubject = await Lesson.find({ subjectId: quiz.subjectId });
+    if (lessonsInSubject.length > 0) {
+      const completedIds = await LessonProgress.distinct("lessonId", {
+        userId: req.user._id,
+        lessonId: { $in: lessonsInSubject.map((l) => l._id) },
+      });
+      const completedSet = new Set(completedIds.map((id) => id.toString()));
+      const unreadLessons = lessonsInSubject.filter((l) => !completedSet.has(l._id.toString()));
+
+      if (unreadLessons.length > 0) {
+        return res.status(403).json({
+          message: "Please read the lesson content for this topic before attempting the quiz.",
+          unreadLessons: unreadLessons.map((l) => ({ _id: l._id, title: l.title })),
+        });
       }
     }
 
@@ -123,6 +140,23 @@ router.post("/:quizId/submit", async (req, res) => {
     // Derive the course this quiz belongs to server-side (never trust client for this)
     const subject = await Subject.findById(quiz.subjectId);
     const courseId = subject ? subject.courseId : null;
+
+    // ============ ENROLLMENT GATE ============
+    if (courseId) {
+      const courseForAccess = await Course.findById(courseId);
+      if (courseForAccess) {
+        const isOwner = courseForAccess.instructorId.toString() === req.user._id.toString();
+        if (req.user.role !== "admin" && !isOwner) {
+          const allowed = await hasCourseAccess(courseForAccess, req.user);
+          if (!allowed) {
+            return res.status(403).json({
+              message: "Please enroll in this course before attempting its quizzes.",
+              requiresEnrollment: true,
+            });
+          }
+        }
+      }
+    }
 
     // Fetch ALL published questions for this quiz - source of truth for totalQuestions
     const allQuizQuestions = await Question.find({ quizId, isPublished: true });

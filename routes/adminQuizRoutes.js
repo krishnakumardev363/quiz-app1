@@ -2,6 +2,7 @@ import express from "express";
 import Quiz from "../models/Quiz.js";
 import Question from "../models/Question.js";
 import { protect, authorizeRoles } from "../middleware/authMiddleware.js";
+import { canManageCourse, getCourseForSubject, getCourseForQuiz } from "../utils/ownership.js";
 
 const router = express.Router();
 
@@ -14,6 +15,15 @@ router.post("/", async (req, res) => {
 
     if (!subjectId || !title) {
       return res.status(400).json({ message: "subjectId and title are required" });
+    }
+
+    // ============ OWNERSHIP CHECK ============
+    const course = await getCourseForSubject(subjectId);
+    if (!course) {
+      return res.status(404).json({ message: "Course not found for this subject" });
+    }
+    if (!canManageCourse(course, req.user)) {
+      return res.status(403).json({ message: "You don't have access to this course" });
     }
 
     const quiz = await Quiz.create({
@@ -34,6 +44,15 @@ router.post("/", async (req, res) => {
 // GET /api/admin/quizzes/subject/:subjectId - list quizzes for a subject
 router.get("/subject/:subjectId", async (req, res) => {
   try {
+    // ============ OWNERSHIP CHECK ============
+    const course = await getCourseForSubject(req.params.subjectId);
+    if (!course) {
+      return res.status(404).json({ message: "Course not found for this subject" });
+    }
+    if (!canManageCourse(course, req.user)) {
+      return res.status(403).json({ message: "You don't have access to this course" });
+    }
+
     const quizzes = await Quiz.find({ subjectId: req.params.subjectId }).sort({ order: 1 });
     res.status(200).json(quizzes);
   } catch (error) {
@@ -48,6 +67,13 @@ router.get("/:id", async (req, res) => {
     if (!quiz) {
       return res.status(404).json({ message: "Quiz not found" });
     }
+
+    // ============ OWNERSHIP CHECK ============
+    const course = await getCourseForSubject(quiz.subjectId);
+    if (!canManageCourse(course, req.user)) {
+      return res.status(403).json({ message: "You don't have access to this course" });
+    }
+
     res.status(200).json(quiz);
   } catch (error) {
     res.status(500).json({ message: "Error fetching quiz", error: error.message });
@@ -57,13 +83,21 @@ router.get("/:id", async (req, res) => {
 // PUT /api/admin/quizzes/:id - update quiz
 router.put("/:id", async (req, res) => {
   try {
+    const existing = await Quiz.findById(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ message: "Quiz not found" });
+    }
+
+    // ============ OWNERSHIP CHECK ============
+    const course = await getCourseForSubject(existing.subjectId);
+    if (!canManageCourse(course, req.user)) {
+      return res.status(403).json({ message: "You don't have access to this course" });
+    }
+
     const quiz = await Quiz.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
       runValidators: true,
     });
-    if (!quiz) {
-      return res.status(404).json({ message: "Quiz not found" });
-    }
     res.status(200).json(quiz);
   } catch (error) {
     res.status(500).json({ message: "Error updating quiz", error: error.message });
@@ -73,10 +107,18 @@ router.put("/:id", async (req, res) => {
 // DELETE /api/admin/quizzes/:id - delete quiz (also deletes its questions)
 router.delete("/:id", async (req, res) => {
   try {
-    const quiz = await Quiz.findByIdAndDelete(req.params.id);
-    if (!quiz) {
+    const existing = await Quiz.findById(req.params.id);
+    if (!existing) {
       return res.status(404).json({ message: "Quiz not found" });
     }
+
+    // ============ OWNERSHIP CHECK ============
+    const course = await getCourseForSubject(existing.subjectId);
+    if (!canManageCourse(course, req.user)) {
+      return res.status(403).json({ message: "You don't have access to this course" });
+    }
+
+    await Quiz.findByIdAndDelete(req.params.id);
     await Question.deleteMany({ quizId: req.params.id });
     res.status(200).json({ message: "Quiz and its questions deleted successfully" });
   } catch (error) {
@@ -90,6 +132,12 @@ router.post("/:id/duplicate", async (req, res) => {
     const quiz = await Quiz.findById(req.params.id);
     if (!quiz) {
       return res.status(404).json({ message: "Quiz not found" });
+    }
+
+    // ============ OWNERSHIP CHECK ============
+    const course = await getCourseForSubject(quiz.subjectId);
+    if (!canManageCourse(course, req.user)) {
+      return res.status(403).json({ message: "You don't have access to this course" });
     }
 
     const newQuiz = await Quiz.create({

@@ -1,6 +1,7 @@
 import express from "express";
 import Lesson from "../models/Lesson.js";
 import { protect, authorizeRoles } from "../middleware/authMiddleware.js";
+import { canManageCourse, getCourseForSubject } from "../utils/ownership.js";
 
 const router = express.Router();
 
@@ -15,6 +16,15 @@ router.post("/", async (req, res) => {
 
     if (!subjectId || !title || !content) {
       return res.status(400).json({ message: "subjectId, title and content are required" });
+    }
+
+    // ============ OWNERSHIP CHECK ============
+    const course = await getCourseForSubject(subjectId);
+    if (!course) {
+      return res.status(404).json({ message: "Course not found for this subject" });
+    }
+    if (!canManageCourse(course, req.user)) {
+      return res.status(403).json({ message: "You don't have access to this course" });
     }
 
     const lesson = await Lesson.create({
@@ -36,6 +46,15 @@ router.post("/", async (req, res) => {
 // ---------------------------------------------
 router.get("/subject/:subjectId", async (req, res) => {
   try {
+    // ============ OWNERSHIP CHECK ============
+    const course = await getCourseForSubject(req.params.subjectId);
+    if (!course) {
+      return res.status(404).json({ message: "Course not found for this subject" });
+    }
+    if (!canManageCourse(course, req.user)) {
+      return res.status(403).json({ message: "You don't have access to this course" });
+    }
+
     const lessons = await Lesson.find({ subjectId: req.params.subjectId }).sort({ order: 1 });
     res.status(200).json(lessons);
   } catch (error) {
@@ -48,13 +67,21 @@ router.get("/subject/:subjectId", async (req, res) => {
 // ---------------------------------------------
 router.put("/:id", async (req, res) => {
   try {
+    const existing = await Lesson.findById(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ message: "Lesson not found" });
+    }
+
+    // ============ OWNERSHIP CHECK ============
+    const course = await getCourseForSubject(existing.subjectId);
+    if (!canManageCourse(course, req.user)) {
+      return res.status(403).json({ message: "You don't have access to this course" });
+    }
+
     const lesson = await Lesson.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
       runValidators: true,
     });
-    if (!lesson) {
-      return res.status(404).json({ message: "Lesson not found" });
-    }
     res.status(200).json(lesson);
   } catch (error) {
     res.status(500).json({ message: "Error updating lesson", error: error.message });
@@ -66,10 +93,18 @@ router.put("/:id", async (req, res) => {
 // ---------------------------------------------
 router.delete("/:id", async (req, res) => {
   try {
-    const lesson = await Lesson.findByIdAndDelete(req.params.id);
-    if (!lesson) {
+    const existing = await Lesson.findById(req.params.id);
+    if (!existing) {
       return res.status(404).json({ message: "Lesson not found" });
     }
+
+    // ============ OWNERSHIP CHECK ============
+    const course = await getCourseForSubject(existing.subjectId);
+    if (!canManageCourse(course, req.user)) {
+      return res.status(403).json({ message: "You don't have access to this course" });
+    }
+
+    await Lesson.findByIdAndDelete(req.params.id);
     res.status(200).json({ message: "Lesson deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: "Error deleting lesson", error: error.message });
@@ -92,6 +127,15 @@ router.post("/generate-ai", async (req, res) => {
 
     if (!subjectId || !topic) {
       return res.status(400).json({ message: "subjectId and topic are required" });
+    }
+
+    // ============ OWNERSHIP CHECK ============
+    const course = await getCourseForSubject(subjectId);
+    if (!course) {
+      return res.status(404).json({ message: "Course not found for this subject" });
+    }
+    if (!canManageCourse(course, req.user)) {
+      return res.status(403).json({ message: "You don't have access to this course" });
     }
 
     // ============ TOPIC LENGTH GUARD ============
