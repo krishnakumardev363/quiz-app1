@@ -8,6 +8,7 @@ import { protect } from "../middleware/authMiddleware.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SIGNATURE_PATH = path.join(__dirname, "..", "assets", "founder-signature.png");
+const SEAL_LOGO_PATH = path.join(__dirname, "..", "assets", "seal-logo.png");
 
 const router = express.Router();
 
@@ -250,11 +251,15 @@ router.get("/:courseId", async (req, res) => {
     doc.circle(sealX, sealY, 34).lineWidth(2).stroke("#C9A24B");
     doc.circle(sealX, sealY, 29).lineWidth(1).stroke("#0B1F44");
     doc.circle(sealX, sealY, 25).fillOpacity(1).fill("#0B1F44");
-    doc
-      .fillColor("#C9A24B")
-      .fontSize(11)
-      .font("Times-Bold")
-      .text("TT", sealX - 12, sealY - 7, { width: 24, align: "center" });
+    // Logo inside the seal (background-removed T2X mark), sized to sit
+    // comfortably inside the inner 25px-radius navy circle.
+    const sealLogoAspect = 2053 / 3068; // height/width of the source PNG
+    const sealLogoWidth = 34;
+    const sealLogoHeight = sealLogoWidth * sealLogoAspect;
+    doc.image(SEAL_LOGO_PATH, sealX - sealLogoWidth / 2, sealY - sealLogoHeight / 2, {
+      width: sealLogoWidth,
+      height: sealLogoHeight,
+    });
     // Ribbon tails
     doc
       .moveTo(sealX - 12, sealY + 26)
