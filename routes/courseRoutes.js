@@ -4,8 +4,11 @@ import Enrollment from "../models/Enrollment.js";
 import Subject from "../models/Subject.js";
 import Quiz from "../models/Quiz.js";
 import Lesson from "../models/Lesson.js";
+import LessonProgress from "../models/LessonProgress.js";
+// import Result from "../models/Result.js";
 import Result from "../models/Result.js";
 import { protect } from "../middleware/authMiddleware.js";
+import { hasCourseAccess } from "../utils/courseAccess.js";
 
 const router = express.Router();
 
@@ -16,7 +19,9 @@ router.use(protect);
 // ---------------------------------------------
 router.get("/", async (req, res) => {
   try {
-    const courses = await Course.find({ isPublished: true }).sort({ createdAt: -1 });
+    const courses = await Course.find({ isPublished: true, visibility: "public" }).sort({
+      createdAt: -1,
+    });
     res.status(200).json(courses);
   } catch (error) {
     res.status(500).json({ message: "Error fetching courses", error: error.message });
@@ -74,6 +79,30 @@ router.get("/:id", async (req, res) => {
       return res.status(404).json({ message: "Course not found" });
     }
 
+    // Private courses are only visible to their creator or a super admin -
+    // regular students only ever reach a private course's quiz via a
+    // multiplayer room code, never through normal browsing.
+    const isOwner = course.instructorId.toString() === req.user._id.toString();
+    const isSuperAdmin = req.user.role === "admin";
+    if (course.visibility === "private" && !isOwner && !isSuperAdmin) {
+      return res.status(403).json({ message: "This course is private." });
+    }
+
+    // ============ ENROLLMENT GATE ============
+    // Previously this endpoint returned full subjects/lessons/quizzes to
+    // ANY logged-in user, enrolled or not. Now: owner and admin bypass
+    // freely (preview/management), everyone else must have actually
+    // enrolled first.
+    if (!isOwner && !isSuperAdmin) {
+      const allowed = await hasCourseAccess(course, req.user);
+      if (!allowed) {
+        return res.status(403).json({
+          message: "Please enroll in this course to view its content.",
+          requiresEnrollment: true,
+        });
+      }
+    }
+
     const subjects = await Subject.find({ courseId: course._id }).sort({ order: 1 });
 
     // Get logged-in user's best score % for every quiz, so the frontend can mark
@@ -91,6 +120,16 @@ router.get("/:id", async (req, res) => {
     const subjectsWithQuizzes = await Promise.all(
       subjects.map(async (subject) => {
         const lessons = await Lesson.find({ subjectId: subject._id }).sort({ order: 1 });
+        const completedLessonIds = await LessonProgress.distinct("lessonId", {
+          userId: req.user._id,
+          lessonId: { $in: lessons.map((l) => l._id) },
+        });
+        const completedSet = new Set(completedLessonIds.map((id) => id.toString()));
+        const lessonsWithStatus = lessons.map((l) => ({
+          ...l.toObject(),
+          isRead: completedSet.has(l._id.toString()),
+        }));
+
         const quizzes = await Quiz.find({ subjectId: subject._id }).sort({ order: 1 });
         const quizzesWithStatus = quizzes.map((q) => {
           const bestScore = bestScoreByQuiz[q._id.toString()] ?? null;
@@ -100,7 +139,15 @@ router.get("/:id", async (req, res) => {
             isCompleted: bestScore !== null && bestScore >= 75,
           };
         });
-        return { ...subject.toObject(), lessons, quizzes: quizzesWithStatus };
+
+        const allLessonsRead = lessonsWithStatus.every((l) => l.isRead);
+
+        return {
+          ...subject.toObject(),
+          lessons: lessonsWithStatus,
+          quizzes: quizzesWithStatus,
+          allLessonsRead,
+        };
       })
     );
 
@@ -200,9 +247,66 @@ router.get("/lessons/:lessonId", async (req, res) => {
     if (!lesson) {
       return res.status(404).json({ message: "Lesson not found" });
     }
+
+    // ============ ENROLLMENT GATE ============
+    const subject = await Subject.findById(lesson.subjectId);
+    const course = subject ? await Course.findById(subject.courseId) : null;
+    if (!course) {
+      return res.status(404).json({ message: "Course not found for this lesson" });
+    }
+    const isOwner = course.instructorId.toString() === req.user._id.toString();
+    if (req.user.role !== "admin" && !isOwner) {
+      const allowed = await hasCourseAccess(course, req.user);
+      if (!allowed) {
+        return res.status(403).json({
+          message: "Please enroll in this course to view its lessons.",
+          requiresEnrollment: true,
+        });
+      }
+    }
+
     res.status(200).json(lesson);
   } catch (error) {
     res.status(500).json({ message: "Error fetching lesson", error: error.message });
+  }
+});
+
+// ---------------------------------------------
+// POST /api/courses/lessons/:lessonId/complete - mark a lesson as read by the current user
+// ---------------------------------------------
+router.post("/lessons/:lessonId/complete", async (req, res) => {
+  try {
+    const lesson = await Lesson.findById(req.params.lessonId);
+    if (!lesson) {
+      return res.status(404).json({ message: "Lesson not found" });
+    }
+
+    // ============ ENROLLMENT GATE ============
+    const subject = await Subject.findById(lesson.subjectId);
+    const course = subject ? await Course.findById(subject.courseId) : null;
+    if (!course) {
+      return res.status(404).json({ message: "Course not found for this lesson" });
+    }
+    const isOwner = course.instructorId.toString() === req.user._id.toString();
+    if (req.user.role !== "admin" && !isOwner) {
+      const allowed = await hasCourseAccess(course, req.user);
+      if (!allowed) {
+        return res.status(403).json({
+          message: "Please enroll in this course first.",
+          requiresEnrollment: true,
+        });
+      }
+    }
+
+    await LessonProgress.findOneAndUpdate(
+      { userId: req.user._id, lessonId: lesson._id },
+      { completedAt: new Date() },
+      { upsert: true, new: true }
+    );
+
+    res.status(200).json({ message: "Lesson marked as read" });
+  } catch (error) {
+    res.status(500).json({ message: "Error marking lesson complete", error: error.message });
   }
 });
 
