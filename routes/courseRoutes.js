@@ -5,7 +5,6 @@ import Subject from "../models/Subject.js";
 import Quiz from "../models/Quiz.js";
 import Lesson from "../models/Lesson.js";
 import LessonProgress from "../models/LessonProgress.js";
-// import Result from "../models/Result.js";
 import Result from "../models/Result.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { hasCourseAccess } from "../utils/courseAccess.js";
