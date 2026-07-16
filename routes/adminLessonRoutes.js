@@ -156,10 +156,17 @@ router.post("/generate-ai", async (req, res) => {
 
 Format it in plain text with:
 - A short introduction (2-3 sentences)
-- 3-5 key concepts, each with a short heading and a 2-4 sentence explanation
+- 3-5 key concepts, each with a short heading on its own line and a 2-4 sentence explanation
+- If the topic is a programming/technical topic, include short code examples wrapped in triple backticks like this:
+\`\`\`
+age = 30
+name = "Alice"
+price = 19.99
+\`\`\`
+  Each statement or line of code must be on its own line inside the backticks - never join multiple lines of code into one line.
 - A brief summary at the end
 
-Do not use markdown symbols like # or **. Keep it readable as plain paragraphs with line breaks between sections. Keep the total length moderate (around 300-500 words) - concise enough for a student to read in a few minutes.
+Do not use markdown symbols like # or ** for headings or emphasis - just short plain lines for headings. Only use triple backticks, and only for actual code blocks. Keep the total length moderate (around 300-500 words of prose, excluding code) - concise enough for a student to read in a few minutes.
 
 IMPORTANT: Do not repeat, restate, quote, or reference this instruction or the topic string itself anywhere in your output. Output ONLY the finished study material text - no preamble, no "Here is the study material for...", no echoing the topic or these instructions.`;
 
